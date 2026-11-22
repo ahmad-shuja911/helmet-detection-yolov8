@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Helmet check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --concrete: #e3e5e7;
+    --panel: #f6f7f8;
+    --ink: #1c1e20;
+    --muted: #5d6368;
+    --line: #c4c8cc;
+    --hivis: #ffc20e;
+    --go: #1b8a4b;
+    --stop: #d32f27;
+    --warn: #c77700;
+    --person: #2c6fdb;
+    --display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+    --body: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--concrete);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 32px 20px 56px; }
+
+  header { margin-bottom: 24px; }
+  h1 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(40px, 7vw, 68px);
+    line-height: 0.95;
+    margin: 0 0 8px;
+    letter-spacing: 0.005em;
+  }
+  header p { margin: 0; color: var(--muted); max-width: 56ch; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+
+  /* Stage: the hazard-stripe edge is the one bold element on the page */
+  .stage {
+    background: var(--panel);
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .stripe {
+    height: 14px;
+    background: repeating-linear-gradient(-45deg, var(--hivis) 0 14px, var(--ink) 14px 28px);
+  }
+  .canvas-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 360px;
+    background: #d6d9dc;
+  }
+  canvas { display: none; max-width: 100%; max-height: 74vh; height: auto; width: auto; }
+  .has-image canvas { display: block; }
+  .has-image .drop { display: none; }
+
+  .drop {
+    width: 100%;
+    min-height: 360px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 24px;
+    text-align: center;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  .drop svg { width: 56px; height: 56px; color: var(--ink); }
+  .drop .title { font-family: var(--display); font-weight: 600; font-size: 28px; line-height: 1.1; }
+  .drop .hint { color: var(--muted); font-size: 15px; }
+  .dragging .canvas-box { background: #fff0b8; }
+
+  .busy {
+    position: absolute; inset: 0;
+    display: none;
+    align-items: center; justify-content: center;
+    background: rgba(28, 30, 32, 0.62);
+    color: #fff;
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 26px;
+  }
+  .is-busy .busy { display: flex; }
+  .busy span::after { content: ""; display: inline-block; width: 1.2em; text-align: left; animation: dots 1.2s steps(4, end) infinite; }
+  @keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+  @media (prefers-reduced-motion: reduce) { .busy span::after { animation: none; content: "..."; } }
+
+  .stage-bar {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    align-items: center; justify-content: space-between;
+    padding: 12px 14px;
+    border-top: 2px solid var(--ink);
+    background: var(--panel);
+  }
+  .filename { color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px;
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    background: var(--hivis);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn:hover { background: #ffd24a; }
+  .btn.quiet { background: transparent; }
+  .btn.quiet:hover { background: #e9ebed; }
+
+  /* Right column */
+  .side { display: flex; flex-direction: column; gap: 16px; }
+  .card {
+    background: var(--panel);
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    padding: 16px;
+  }
+  .card h2 { font-family: var(--display); font-weight: 700; font-size: 22px; margin: 0 0 10px; line-height: 1.1; }
+
+  /* Verdict sign */
+  .sign { display: flex; gap: 14px; align-items: center; padding: 0; overflow: hidden; }
+  .sign-icon {
+    flex: none; width: 76px; align-self: stretch;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--muted); color: #fff;
+  }
+  .sign-icon svg { width: 38px; height: 38px; }
+  .sign-text { padding: 14px 14px 14px 0; }
+  .sign-text .big { font-family: var(--display); font-weight: 700; font-size: 28px; line-height: 1.05; margin: 0; }
+  .sign-text .small { margin: 4px 0 0; color: var(--muted); font-size: 15px; }
+  .sign.go .sign-icon { background: var(--go); }
+  .sign.stop .sign-icon { background: var(--stop); }
+  .sign.warn .sign-icon { background: var(--warn); }
+  .sign.idle .sign-icon { background: #8b9197; }
+
+  /* Class filters */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px;
+    border: 2px solid var(--ink);
+    border-radius: 999px;
+    background: #fff;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .chip .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c); }
+  .chip .n { font-variant-numeric: tabular-nums; color: var(--muted); }
+  .chip[aria-pressed="false"] { opacity: 0.5; background: transparent; }
+  .chip[aria-pressed="false"] .dot { background: transparent; box-shadow: inset 0 0 0 2px var(--c); }
+
+  /* Slider */
+  .slider-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+  .slider-row label { font-weight: 600; }
+  .slider-row output { font-variant-numeric: tabular-nums; font-weight: 600; }
+  input[type="range"] { width: 100%; accent-color: var(--ink); }
+  .slider-help { color: var(--muted); font-size: 14px; margin: 6px 0 0; }
+
+  /* Detections list */
+  .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .row { display: grid; grid-template-columns: 12px 1fr auto; gap: 10px; align-items: center; }
+  .row .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c); }
+  .row .name { font-weight: 600; text-transform: capitalize; }
+  .row .pct { font-variant-numeric: tabular-nums; color: var(--muted); }
+  .bar { grid-column: 2 / 4; height: 6px; background: #d9dcdf; border-radius: 3px; overflow: hidden; margin-top: -4px; }
+  .bar i { display: block; height: 100%; background: var(--c); }
+  .empty { color: var(--muted); margin: 0; }
+
+  .note { margin: 0; font-size: 14px; color: var(--muted); }
+  .error {
+    border-color: var(--stop);
+    background: #fdeceb;
+  }
+  .error h2 { color: var(--stop); }
+  .error p { margin: 0 0 8px; }
+  code { background: #e3e5e7; padding: 2px 6px; border-radius: 3px; font-size: 14px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Helmet check</h1>
+    <p>Upload a photo and the model marks every person, helmet and missing helmet it finds.</p>
+  </header>
+
+  <div class="layout">
+    <!-- Image stage -->
+    <section class="stage" id="stage" aria-label="Image preview">
+      <div class="stripe"></div>
+      <div class="canvas-box" id="canvasBox">
+        <button type="button" class="drop" id="drop">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
+            <path d="M12 16V4"/><path d="m7 9 5-5 5 5"/>
+          </svg>
+          <span class="title">Drop a photo here</span>
+          <span class="hint">or click to choose a JPG, PNG or WebP. Full upper-body shots from a few meters away work best.</span>
+        </button>
+        <canvas id="canvas" role="img" aria-label="Photo with detection boxes"></canvas>
+        <div class="busy" aria-live="polite"><span>Checking the photo</span></div>
+      </div>
+      <div class="stage-bar" id="stageBar" hidden>
+        <span class="filename" id="filename"></span>
+        <button type="button" class="btn quiet" id="changeBtn">Choose another photo</button>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" hidden>
+    </section>
+
+    <!-- Results -->
+    <aside class="side" aria-live="polite">
+      <div class="card sign idle" id="sign">
+        <div class="sign-icon" id="signIcon"></div>
+        <div class="sign-text">
+          <p class="big" id="signTitle">No photo yet</p>
+          <p class="small" id="signSub">Add a photo to see the result.</p>
+        </div>
+      </div>
+
+      <div class="card error" id="errorCard" hidden>
+        <h2>Couldn’t check the photo</h2>
+        <div id="errorBody"></div>
+      </div>
+
+      <div class="card" id="filtersCard" hidden>
+        <h2>Show on photo</h2>
+        <div class="chips" id="chips"></div>
+      </div>
+
+      <div class="card" id="sliderCard" hidden>
+        <div class="slider-row">
+          <label for="conf">Minimum confidence</label>
+          <output id="confOut" for="conf">25%</output>
+        </div>
+        <input type="range" id="conf" min="10" max="90" step="1" value="25" autocomplete="off">
+        <p class="slider-help">Raise it to hide shaky detections. Lower it if something obvious is missing.</p>
+      </div>
+
+      <div class="card" id="listCard" hidden>
+        <h2>Detections</h2>
+        <ul class="list" id="list"></ul>
+      </div>
+
+      <p class="note" id="zoomNote" hidden>This photo was close up, so the model also checked a zoomed-out copy and kept the better result.</p>
+    </aside>
+  </div>
+</div>
+
+<script>
+  // Change this if your API runs somewhere else.
+  const API_URL = "http://127.0.0.1:8000";
+  const FETCH_CONF = 0.10; // ask the server for everything down to 10%, then filter here
+
+  const COLORS = { "helmet": "#1b8a4b", "no-helmet": "#d32f27", "person": "#2c6fdb" };
+  const LABELS = { "helmet": "Helmet", "no-helmet": "No helmet", "person": "Person" };
+
+  const $ = (id) => document.getElementById(id);
+  const stage = $("stage"), canvasBox = $("canvasBox"), canvas = $("canvas"), ctx = canvas.getContext("2d");
+  const fileInput = $("fileInput"), drop = $("drop");
+
+  const ICONS = {
+    go: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
+    stop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+    warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 6v8"/><path d="M12 18.2v.1"/></svg>',
+    idle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg>'
+  };
+
+  let image = null;          // loaded HTMLImageElement
+  let data = null;           // last API response
+  let hidden = new Set();    // classes toggled off
+  let runId = 0;             // ignore stale responses
+
+  const norm = (c) => String(c).toLowerCase().replace(/_/g, "-");
+  const colorOf = (c) => COLORS[norm(c)] || "#c77700";
+  const labelOf = (c) => LABELS[norm(c)] || c;
+
+  /* ---------- picking a file ---------- */
+  drop.addEventListener("click", () => fileInput.click());
+  $("changeBtn").addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); fileInput.value = ""; });
+
+  ["dragenter", "dragover"].forEach(t => stage.addEventListener(t, (e) => { e.preventDefault(); stage.classList.add("dragging"); }));
+  ["dragleave", "drop"].forEach(t => stage.addEventListener(t, (e) => { e.preventDefault(); stage.classList.remove("dragging"); }));
+  stage.addEventListener("drop", (e) => {
+    const f = e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  });
+
+  function handleFile(file) {
+    if (!file.type.startsWith("image/")) {
+      showError("<p>That file isn’t an image. Choose a JPG, PNG or WebP photo.</p>");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      image = img;
+      data = null;
+      hidden.clear();
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      ctx.drawImage(img, 0, 0);
+      canvasBox.parentElement.classList.add("has-image");
+      canvasBox.classList.add("has-image");
+      $("filename").textContent = file.name;
+      $("stageBar").hidden = false;
+      clearError();
+      resetResults();
+      analyze(file);
+    };
+    img.onerror = () => showError("<p>The browser couldn’t open that image. Try a different file.</p>");
+    img.src = url;
+  }
+
+  /* ---------- calling the API ---------- */
+  async function analyze(file) {
+    const id = ++runId;
+    canvasBox.classList.add("is-busy");
+    const body = new FormData();
+    body.append("file", file);
+    try {
+      const res = await fetch(`${API_URL}/predict?conf=${FETCH_CONF}`, { method: "POST", body });
+      const json = await res.json().catch(() => ({}));
+      if (id !== runId) return;
+      if (!res.ok) throw new Error(json.error || `Server answered ${res.status}`);
+      data = json;
+      render();
+    } catch (err) {
+      if (id !== runId) return;
+      const offline = err instanceof TypeError;
+      showError(offline
+        ? `<p>The page can’t reach the detection server at <code>${API_URL}</code>.</p>
+           <p>Start it from your project folder with <code>python -m uvicorn main:app --reload</code>, then choose the photo again.</p>`
+        : `<p>${escapeHtml(err.message)}</p>`);
+      setSign("idle", "No result", "The check didn’t finish.");
+      redraw([]);
+    } finally {
+      if (id === runId) canvasBox.classList.remove("is-busy");
+    }
+  }
+
+  /* ---------- rendering ---------- */
+  function currentThreshold() { return Number($("conf").value) / 100; }
+
+  function visible() {
+    if (!data) return [];
+    const t = currentThreshold();
+    return data.detections.filter(d => d.confidence >= t);
+  }
+
+  function render() {
+    const dets = visible();
+    redraw(dets.filter(d => !hidden.has(norm(d.class))));
+    renderVerdict(dets);
+    renderChips(dets);
+    renderList(dets.filter(d => !hidden.has(norm(d.class))));
+    $("filtersCard").hidden = false;
+    $("sliderCard").hidden = false;
+    $("listCard").hidden = false;
+    $("zoomNote").hidden = !(data && data.zoom_out_used);
+  }
+
+  function redraw(dets) {
+    if (!image) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(image, 0, 0);
+    const base = Math.max(canvas.width, canvas.height);
+    const lw = Math.max(3, base / 260);
+    const fs = Math.max(14, base / 48);
+    ctx.lineJoin = "round";
+    ctx.textBaseline = "middle";
+    ctx.font = `600 ${fs}px "Barlow", Arial, sans-serif`;
+
+    // 1) draw all boxes first (big ones underneath, small ones on top)
+    [...dets].sort((a, b) => area(b) - area(a)).forEach(d => {
+      const { x1, y1, x2, y2 } = d.box;
+      ctx.strokeStyle = colorOf(d.class);
+      ctx.lineWidth = lw;
+      ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+    });
+
+    // 2) draw labels on top, nudging each one so no two labels overlap
+    const placed = [];
+    const overlaps = (r) => placed.some(p =>
+      r.x < p.x + p.w && r.x + r.w > p.x && r.y < p.y + p.h && r.y + r.h > p.y);
+    const clampX = (x, w) => Math.min(Math.max(0, x), canvas.width - w);
+    const clampY = (y, h) => Math.min(Math.max(0, y), canvas.height - h);
+
+    // most confident first, so they get the best spot
+    [...dets].sort((a, b) => b.confidence - a.confidence).forEach(d => {
+      const { x1, y1, x2, y2 } = d.box;
+      const text = `${labelOf(d.class)} ${Math.round(d.confidence * 100)}%`;
+      const padX = fs * 0.5, h = fs * 1.5;
+      const w = ctx.measureText(text).width + padX * 2;
+
+      // preferred spots, in order: above-left, above-right, inside top, inside bottom
+      const spots = [
+        [x1, y1 - h], [x2 - w, y1 - h],
+        [x1, y1], [x2 - w, y1],
+        [x1, y2 - h], [x2 - w, y2 - h],
+      ].map(([x, y]) => ({ x: clampX(x, w), y: clampY(y, h), w, h }));
+
+      let spot = spots.find(s => !overlaps(s));
+      if (!spot) {
+        // still crowded: slide down from the top-left corner until there is room
+        spot = { ...spots[2] };
+        for (let i = 0; i < 20 && overlaps(spot); i++) spot.y = clampY(spot.y + h, h);
+      }
+      placed.push(spot);
+
+      ctx.fillStyle = colorOf(d.class);
+      ctx.fillRect(spot.x, spot.y, w, h);
+      ctx.fillStyle = "#fff";
+      ctx.fillText(text, spot.x + padX, spot.y + h / 2 + 1);
+    });
+  }
+  const area = (d) => (d.box.x2 - d.box.x1) * (d.box.y2 - d.box.y1);
+
+  function setSign(kind, title, sub) {
+    $("sign").className = `card sign ${kind}`;
+    $("signIcon").innerHTML = ICONS[kind];
+    $("signTitle").textContent = title;
+    $("signSub").textContent = sub;
+  }
+
+  function count(dets, cls) { return dets.filter(d => norm(d.class) === cls).length; }
+
+  function renderVerdict(dets) {
+    const noHelmet = count(dets, "no-helmet"), helmet = count(dets, "helmet"), person = count(dets, "person");
+    if (noHelmet > 0) {
+      setSign("stop", "No helmet found",
+        noHelmet === 1 ? "The model sees 1 head without a helmet." : `The model sees ${noHelmet} heads without helmets.`);
+    } else if (helmet > 0) {
+      setSign("go", helmet === 1 ? "Helmet found" : `${helmet} helmets found`,
+        "No one without a helmet was detected.");
+    } else if (person > 0) {
+      setSign("warn", "Helmet not confirmed",
+        "A person was found, but no helmet or bare head at this confidence. Try lowering the minimum.");
+    } else {
+      setSign("idle", "Nothing detected",
+        "Try lowering the minimum confidence, or use a photo with the person further from the camera.");
+    }
+  }
+
+  function renderChips(dets) {
+    const classes = ["helmet", "no-helmet", "person"];
+    $("chips").innerHTML = classes.map(c => `
+      <button type="button" class="chip" data-c="${c}" style="--c:${COLORS[c]}" aria-pressed="${!hidden.has(c)}">
+        <span class="dot"></span>${LABELS[c]} <span class="n">${count(dets, c)}</span>
+      </button>`).join("");
+  }
+  $("chips").addEventListener("click", (e) => {
+    const b = e.target.closest(".chip");
+    if (!b) return;
+    const c = b.dataset.c;
+    hidden.has(c) ? hidden.delete(c) : hidden.add(c);
+    render();
+  });
+
+  function renderList(dets) {
+    if (!dets.length) {
+      $("list").innerHTML = '<li class="empty">Nothing to list at this confidence.</li>';
+      return;
+    }
+    $("list").innerHTML = dets.map(d => `
+      <li>
+        <div class="row" style="--c:${colorOf(d.class)}">
+          <span class="dot"></span>
+          <span class="name">${escapeHtml(labelOf(d.class))}</span>
+          <span class="pct">${(d.confidence * 100).toFixed(1)}%</span>
+          <div class="bar"><i style="width:${Math.round(d.confidence * 100)}%"></i></div>
+        </div>
+      </li>`).join("");
+  }
+
+  $("conf").addEventListener("input", () => {
+    $("confOut").textContent = `${$("conf").value}%`;
+    if (data) render();
+  });
+
+  /* ---------- helpers ---------- */
+  function resetResults() {
+    setSign("idle", "Checking…", "This takes a second or two.");
+    ["filtersCard", "sliderCard", "listCard", "zoomNote"].forEach(id => $(id).hidden = true);
+  }
+  function showError(html) { $("errorBody").innerHTML = html; $("errorCard").hidden = false; }
+  function clearError() { $("errorCard").hidden = true; }
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+  setSign("idle", "No photo yet", "Add a photo to see the result.");
+</script>
+</body>
+</html>

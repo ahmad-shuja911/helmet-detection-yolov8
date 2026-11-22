@@ -1,0 +1,27 @@
+# Dataset and anything that contains the photos (Getty Images / Unsplash, not redistributable)
+dataset/
+roboflow_export/
+dataset_labels_backup/
+outputs/
+report/
+extras/
+*.jpg
+*.jpeg
+*.webp
+*.avif
+*.zip
+
+# Keep only the figures that contain no photos
+*.png
+!figures/*.png
+
+# Model weights and caches
+*.pt
+*.cache
+*.whl
+
+# Secrets and environments
+.env
+venv/
+__pycache__/
+.ipynb_checkpoints/

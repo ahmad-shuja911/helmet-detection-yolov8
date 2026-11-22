@@ -1,0 +1,7 @@
+ultralytics==8.4.216
+onnxruntime==1.32.0
+opencv-python-headless
+numpy
+fastapi
+uvicorn
+python-multipart
